@@ -30,9 +30,9 @@ pipeline {
             }
         }
 
-        stage('Build (Parallel runtimes)') {
+        stage('Build_Parallel_Runtimes') {
             parallel {
-                stage('Node 18') {
+                stage('Node_18') {
                     agent any
                     steps {
                         bat 'npm install'
@@ -40,11 +40,9 @@ pipeline {
                     }
                 }
 
-                stage('Node 20') {
-                    agent any   // ❌ REMOVED docker agent
+                stage('Node_20') {
+                    agent any
                     steps {
-                        // You cannot switch Node version automatically on Windows Jenkins
-                        // So we simply log the version
                         bat 'node -v'
                         bat 'npm install'
                         bat 'npm run build'
@@ -53,10 +51,10 @@ pipeline {
             }
         }
 
-        stage('Archive Results') {
+        stage('Archive_Results') {
             steps {
-                archiveArtifacts artifacts: '**/logs/*.log', allowEmptyArchive: true
-                archiveArtifacts artifacts: '**/build/**', allowEmptyArchive: true
+                archiveArtifacts artifacts: "**/logs/*.log", allowEmptyArchive: true
+                archiveArtifacts artifacts: "**/build/**", allowEmptyArchive: true
             }
         }
     }
