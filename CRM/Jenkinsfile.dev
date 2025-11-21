@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Build (Parallel runtimes)') {
+            parallel {
+                stage('Node 18') {
+                    agent { docker { image 'node:18' } }
+                    steps {
+                        sh 'npm install'
+                        sh 'npm run build'
+                    }
+                }
+                stage('Node 20') {
+                    agent { docker { image 'node:20' } }
+                    steps {
+                        sh 'npm install'
+                        sh 'npm run build'
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t crm-dev .'
+            }
+        }
+
+        stage('Run Container') {
+            steps {
+                sh 'docker run -d -p 5000:5000 --name crm-dev-container crm-dev'
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: '**/logs/*.log', allowEmptyArchive: true
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker rm -f crm-dev-container || true'
+            sh 'docker system prune -f || true'
+        }
+    }
+}
