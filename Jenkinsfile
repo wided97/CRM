@@ -6,12 +6,9 @@ pipeline {
         stage('Check PR Target') {
             steps {
                 script {
-                    // Detect the target branch of the PR
                     def targetBranch = env.CHANGE_TARGET ?: ""
-
                     echo "Detected PR target branch: ${targetBranch}"
 
-                    // Block PRs not targeting dev
                     if (targetBranch != "dev") {
                         echo "This PR does NOT target dev. Skipping pipeline."
                         currentBuild.result = 'NOT_BUILT'
@@ -29,55 +26,44 @@ pipeline {
 
         stage('Setup') {
             steps {
-                sh 'npm install'
+                bat 'npm install'
             }
         }
 
         stage('Build (Parallel runtimes)') {
             parallel {
                 stage('Node 18') {
-                    agent { docker { image 'node:18' } }
+                    agent any
                     steps {
-                        sh 'npm install'
-                        sh 'npm run build'
+                        bat 'npm install'
+                        bat 'npm run build'
                     }
                 }
+
                 stage('Node 20') {
-                    agent { docker { image 'node:20' } }
+                    agent any   // ❌ REMOVED docker agent
                     steps {
-                        sh 'npm install'
-                        sh 'npm run build'
+                        // You cannot switch Node version automatically on Windows Jenkins
+                        // So we simply log the version
+                        bat 'node -v'
+                        bat 'npm install'
+                        bat 'npm run build'
                     }
                 }
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                sh 'docker build -t crm-pr .'
-            }
-        }
-
-        stage('Run Container') {
-            steps {
-                sh 'docker run -d -p 5000:5000 --name crm-pr-container crm-pr'
             }
         }
 
         stage('Archive Results') {
             steps {
                 archiveArtifacts artifacts: '**/logs/*.log', allowEmptyArchive: true
+                archiveArtifacts artifacts: '**/build/**', allowEmptyArchive: true
             }
         }
     }
 
     post {
         always {
-            // CLEANUP container
-            sh 'docker rm -f crm-pr-container || true'
-
-            // CLEANUP unused images/containers
-            sh 'docker system prune -f || true'
+            echo "Pipeline finished."
         }
     }
 }
