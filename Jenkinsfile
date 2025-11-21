@@ -1,3 +1,4 @@
+//corrected code
 pipeline {
     agent any
 
