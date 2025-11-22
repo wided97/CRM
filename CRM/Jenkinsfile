@@ -9,7 +9,7 @@ pipeline {
     agent any
 
     environment {
-        GITHUB_CREDENTIALS = 'github-token-credentials-id'
+        GITHUB_CREDENTIALS = 'github-token'
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
         COMPOSE_PROJECT_NAME = "crm_pipeline_${env.BUILD_ID}"
     }
