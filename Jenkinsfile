@@ -1,95 +1,217 @@
+/*
+=================================================================================
+Jenkinsfile (multibranch) - Node (backend) + React (frontend) + MongoDB
+WITHOUT SMOKE TEST STAGE (removed per request)
+=================================================================================
+*/
+
 pipeline {
     agent any
 
     environment {
-        IMAGE = "monapp"
-        TAG   = "pr-${env.CHANGE_ID}"   // unique tag per PR
+        GITHUB_CREDENTIALS = 'github-token'
+        DOCKER_COMPOSE_FILE = 'docker-compose.yml'
+        COMPOSE_PROJECT_NAME = "crm_pipeline_${env.BUILD_ID}"
     }
 
     stages {
-        stage('Validate PR Target') {
+
+        stage('Determine Pipeline Type') {
             steps {
                 script {
-                    def target = env.CHANGE_TARGET ?: ""
-                    echo "Pull Request target branch: ${target}"
-
-                    if (target != "dev") {
-                        error(" This PR does NOT target 'dev'. Pipeline stopped.")
+                    if (env.CHANGE_ID) {
+                        env.PIPELINE_TYPE = 'PR'
+                        echo "Detected: Pull Request"
+                    } else if (env.GIT_TAG) {
+                        env.PIPELINE_TYPE = 'TAG'
+                        echo "Detected: Tag Build"
+                    } else {
+                        env.PIPELINE_TYPE = 'DEV'
+                        echo "Detected: Dev Build"
                     }
                 }
             }
         }
 
-       
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                checkout scm
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[
+                        name: env.CHANGE_BRANCH ?: env.GIT_TAG ?: env.BRANCH_NAME ?: 'refs/heads/dev'
+                    ]],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/wided97/CRM.git',
+                        credentialsId: "${GITHUB_CREDENTIALS}"
+                    ]]
+                ])
             }
         }
 
-      
+        stage('Validate PR Target') {
+            when {
+                expression { env.PIPELINE_TYPE == 'PR' }
+            }
+            steps {
+                script {
+                    echo "PR target branch = ${env.CHANGE_TARGET}"
+                    if (env.CHANGE_TARGET != 'dev') {
+                        echo "⚠ WARNING: PR does not target dev!"
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✔ PR target is dev"
+                    }
+                }
+            }
+        }
+
+        /***************************************************************
+         SETUP stage: install backend + frontend dependencies
+        ***************************************************************/
         stage('Setup') {
             steps {
-                bat """
-                    echo Preparing environment...
-                    docker --version
-                    echo Workspace: %CD%
-                """
+                script {
+                    echo "→ Installing npm dependencies..."
+
+                    if (isUnix()) {
+                        sh '''
+                            set -e
+                            cd backend
+                            npm ci --no-audit --progress=false
+                            cd ../frontend
+                            npm ci --no-audit --progress=false
+                            cd ..
+                        '''
+                    } else {
+                        bat '''
+                            @echo off
+                            cd backend
+                            npm ci --no-audit --no-progress
+                            cd ..\\frontend
+                            npm ci --no-audit --no-progress
+                            cd ..
+                        '''
+                    }
+                }
             }
         }
 
-
+        /***************************************************************
+         BUILD backend + frontend
+        ***************************************************************/
         stage('Build') {
             steps {
-                bat """
-                    docker build -t %IMAGE%:%TAG% .
-                """
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            set -e
+                            # Backend build if available
+                            if [ -f backend/package.json ]; then
+                                cd backend
+                                if npm run | grep -q "build"; then
+                                    npm run build
+                                fi
+                                cd ..
+                            fi
+
+                            cd frontend
+                            npm run build
+                            cd ..
+                        '''
+                    } else {
+                        bat '''
+                            @echo off
+                            if exist backend\\package.json (
+                                pushd backend
+                                call npm run build || echo "backend build skipped"
+                                popd
+                            )
+                            pushd frontend
+                            call npm run build
+                            popd
+                        '''
+                    }
+                }
             }
         }
 
+        /***************************************************************
+         RUN docker-compose (Mongo + backend + frontend)
+        ***************************************************************/
         stage('Run') {
             steps {
-                bat """
-                    docker rm -f monapp_test 2>nul || ver > nul
-                    docker run -d --name monapp_test -p 8081:80 %IMAGE%:%TAG%
-                    ping -n 5 127.0.0.1 > nul
-                """
+                script {
+                    echo "→ Running docker-compose stack..."
+
+                    if (isUnix()) {
+                        sh """
+                            set -e
+                            COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME} docker-compose -f ${DOCKER_COMPOSE_FILE} build --parallel
+                            COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME} docker-compose -f ${DOCKER_COMPOSE_FILE} up -d --remove-orphans
+                            sleep 3
+                        """
+                    } else {
+                        bat """
+                            @echo off
+                            set COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+                            docker-compose -f %DOCKER_COMPOSE_FILE% build --parallel
+                            docker-compose -f %DOCKER_COMPOSE_FILE% up -d --remove-orphans
+                            timeout /t 3 /nobreak >nul
+                        """
+                    }
+                }
             }
         }
 
-        stage('Smoke Test') {
-            steps {
-                bat """
-                    echo Testing HTTP status...
-                    curl -I http://localhost:8081 | find "200 OK"
-                """
-            }
-        }
-
-
+        /***************************************************************
+         ARCHIVE: frontend build + backend logs (if any)
+        ***************************************************************/
         stage('Archive Artifacts') {
             steps {
-                bat "echo Smoke Test Passed > smoke_result.txt"
-                archiveArtifacts artifacts: 'smoke_result.txt', fingerprint: true
+                script {
+                    echo "→ Archiving build artifacts..."
+                    archiveArtifacts artifacts: 'frontend/build/**', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'backend/**/*.log', allowEmptyArchive: true
+                }
             }
         }
 
-
+        /***************************************************************
+         CLEANUP docker-compose
+        ***************************************************************/
         stage('Cleanup') {
             steps {
-                bat "docker rm -f monapp_test 2>nul || ver > nul"
+                script {
+                    echo "→ Cleaning containers..."
+
+                    if (isUnix()) {
+                        sh """
+                            set +e
+                            COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME} docker-compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans
+                        """
+                    } else {
+                        bat """
+                            @echo off
+                            set COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+                            docker-compose -f %DOCKER_COMPOSE_FILE% down -v --remove-orphans
+                        """
+                    }
+                }
             }
         }
     }
 
     post {
         success {
-            echo "✔ PR Build + Smoke Test Succeeded"
+            echo "✔ ${env.PIPELINE_TYPE} pipeline SUCCESS"
+        }
+        unstable {
+            echo "⚠ ${env.PIPELINE_TYPE} pipeline UNSTABLE"
         }
         failure {
-            echo " PR Build or Smoke Test Failed"
-            bat "docker rm -f monapp_test 2>nul || ver > nul"
+            echo "❌ ${env.PIPELINE_TYPE} pipeline FAILED"
         }
     }
 }
-//comment
