@@ -1,4 +1,3 @@
-
 version: "3.9"
 
 services:
@@ -9,12 +8,11 @@ services:
       - mern-network
 
   backend:
-    build: ./Backend
+    build: ./CRM/BackEnd
     container_name: backend
     ports:
       - "5000:5000"
     environment:
-
       MONGO_URI: mongodb://mongodb:27017/MiniCRM
     depends_on:
       - mongodb
@@ -22,15 +20,14 @@ services:
       - mern-network
 
   frontend:
-   build: ./frontend
-   container_name: frontend
-   ports:
-     - "5173:80"
-   depends_on:
-     - backend
-   networks:
-     - mern-network
-
+    build: ./CRM/frontend
+    container_name: frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - mern-network
 
 networks:
   mern-network:
