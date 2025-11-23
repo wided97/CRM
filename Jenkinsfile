@@ -78,20 +78,20 @@ pipeline {
                     if (isUnix()) {
                         sh '''
                             set -e
-                            cd backend
+                            cd CRM/BackEnd
                             npm ci --no-audit --progress=false
                             cd ../frontend
                             npm ci --no-audit --progress=false
-                            cd ..
+                            cd ../../
                         '''
                     } else {
                         bat '''
                             @echo off
-                            cd backend
+                            cd CRM\BackEnd
                             npm ci --no-audit --no-progress
                             cd ..\\frontend
                             npm ci --no-audit --no-progress
-                            cd ..
+                            cd ..\..
                         '''
                     }
                 }
@@ -108,27 +108,27 @@ pipeline {
                         sh '''
                             set -e
                             # Backend build if available
-                            if [ -f backend/package.json ]; then
-                                cd backend
+                            if [ -f CRM/BackEnd/package.json ]; then
+                                cd CRM/BackEnd
                                 if npm run | grep -q "build"; then
                                     npm run build
                                 fi
-                                cd ..
+                                cd ../..
                             fi
 
-                            cd frontend
+                            cd CRM/frontend
                             npm run build
-                            cd ..
+                            cd ../..
                         '''
                     } else {
                         bat '''
                             @echo off
-                            if exist backend\\package.json (
-                                pushd backend
+                            if exist CRM\BackEnd\package.json (
+                                pushd CRM\BackEnd
                                 call npm run build || echo "backend build skipped"
                                 popd
                             )
-                            pushd frontend
+                            pushd CRM\frontend
                             call npm run build
                             popd
                         '''
@@ -172,8 +172,8 @@ pipeline {
             steps {
                 script {
                     echo "→ Archiving build artifacts..."
-                    archiveArtifacts artifacts: 'frontend/build/**', allowEmptyArchive: true
-                    archiveArtifacts artifacts: 'backend/**/*.log', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'CRM/frontend/build/**', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'CRM/BackEnd/**/*.log', allowEmptyArchive: true
                 }
             }
         }
