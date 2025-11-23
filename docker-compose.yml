@@ -3,13 +3,13 @@ version: "3.9"
 services:
   mongodb:
     image: mongo
-    container_name: mongodb
+    volumes:
+      - mongo-data:/data/db
     networks:
       - mern-network
 
   backend:
     build: ./CRM/BackEnd
-    container_name: backend
     ports:
       - "5000:5000"
     environment:
@@ -21,7 +21,6 @@ services:
 
   frontend:
     build: ./CRM/frontend
-    container_name: frontend
     ports:
       - "5173:80"
     depends_on:
@@ -32,3 +31,6 @@ services:
 networks:
   mern-network:
     driver: bridge
+
+volumes:
+  mongo-data:

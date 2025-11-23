@@ -178,32 +178,27 @@ pipeline {
             }
         }
 
-        /***************************************************************
-         CLEANUP docker-compose
-        ***************************************************************/
-        stage('Cleanup') {
-            steps {
-                script {
-                    echo "→ Cleaning containers..."
-
-                    if (isUnix()) {
-                        sh """
-                            set +e
-                            COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME} docker-compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans
-                        """
-                    } else {
-                        bat """
-                            @echo off
-                            set COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-                            docker-compose -f %DOCKER_COMPOSE_FILE% down -v --remove-orphans
-                        """
-                    }
-                }
-            }
-        }
     }
 
     post {
+        always {
+            script {
+                echo "→ Cleaning containers (post)..."
+
+                if (isUnix()) {
+                    sh """
+                        set +e
+                        COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME} docker-compose -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans
+                    """
+                } else {
+                    bat """
+                        @echo off
+                        set COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+                        docker-compose -f %DOCKER_COMPOSE_FILE% down -v --remove-orphans
+                    """
+                }
+            }
+        }
         success {
             echo "✔ ${env.PIPELINE_TYPE} pipeline SUCCESS"
         }

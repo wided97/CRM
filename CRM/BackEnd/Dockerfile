@@ -1,8 +1,19 @@
 FROM node:lts-alpine
+
 WORKDIR /app
+
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production --no-audit --progress=false
+
 COPY . .
+
+# Default to the compose service host but allow overriding at build time for other runtimes.
+ARG MONGO_HOST=mongodb
+ENV MONGO_URI=mongodb://${MONGO_HOST}:27017/MiniCRM
+
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 5000
-ENV MONGO_URI=mongodb://host.docker.internal:27017/MiniCRM
+
 CMD ["npm", "start"]
