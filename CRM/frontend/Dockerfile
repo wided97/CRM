@@ -1,7 +1,7 @@
 FROM node:lts-alpine as build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production --no-audit --progress=false
 COPY . .
 RUN npm run build
 FROM nginx:alpine
