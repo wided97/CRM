@@ -56,8 +56,14 @@ pipeline {
             }
             steps {
                 script {
-                    echo "PR target branch = ${env.CHANGE_TARGET}"
-                    if (env.CHANGE_TARGET != 'dev') {
+                    // Normalize common SCM formats (e.g., "refs/heads/dev" or "origin/dev")
+                    def rawTarget = env.CHANGE_TARGET ?: ''
+                    def normalizedTarget = rawTarget
+                        .replaceFirst('^refs/heads/', '')
+                        .replaceFirst('^origin/', '')
+
+                    echo "PR target branch = ${rawTarget}"
+                    if (normalizedTarget != 'dev') {
                         echo "⚠ WARNING: PR does not target dev!"
                         currentBuild.result = 'UNSTABLE'
                     } else {
