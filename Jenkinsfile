@@ -87,7 +87,7 @@ pipeline {
                     } else {
                         bat '''
                             @echo off
-                            cd CRM\CRM\BackEnd
+                            cd CRM\\BackEnd
                             npm ci --no-audit --no-progress
                             cd ..\\frontend
                             npm ci --no-audit --no-progress
